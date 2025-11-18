@@ -1,10 +1,15 @@
-
 import { GoogleGenAI, Type } from "@google/genai";
 import { PREFECTURES } from '../constants';
 import { GameMode } from '../types';
 
 const getClient = () => {
-  const apiKey = process.env.API_KEY;
+  // Support various environment variable prefixes for Vercel/Vite/CRA/Next.js
+  // This ensures the key is accessible in client-side builds
+  const apiKey = process.env.NEXT_PUBLIC_API_KEY || 
+                 process.env.VITE_API_KEY || 
+                 process.env.REACT_APP_API_KEY || 
+                 process.env.API_KEY;
+
   if (!apiKey) {
     console.error("API_KEY is missing");
     throw new Error("API Key is required");

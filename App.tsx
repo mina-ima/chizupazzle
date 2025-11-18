@@ -88,7 +88,7 @@ const App: React.FC = () => {
     setLastCorrect(null);
     setShowHome(false);
     
-    // Proactively check for API key if using AI modes
+    // Proactively check for API key if using AI modes and we are in AI Studio
     if ([GameMode.SOUVENIR, GameMode.CUSTOM].includes(mode)) {
         if (window.aistudio) {
             try {
@@ -266,7 +266,7 @@ const App: React.FC = () => {
         return;
     }
     
-    // Proactively check key for hints too
+    // Proactively check key for hints too if in AI Studio
     if (window.aistudio) {
         const hasKey = await window.aistudio.hasSelectedApiKey();
         if (!hasKey) {
@@ -302,9 +302,6 @@ const App: React.FC = () => {
           } catch (e) {
             console.error("API key selection cancelled or failed", e);
           }
-      } else {
-          // Fallback if not in AI Studio environment (shouldn't happen based on context)
-          alert("API Key configuration is not available in this environment.");
       }
   };
 
@@ -344,25 +341,53 @@ const App: React.FC = () => {
                       <AlertCircle className="w-8 h-8 text-rose-500" />
                   </div>
                   <h3 className="text-xl font-black text-slate-800 mb-2">APIキーが必要です</h3>
-                  <p className="text-slate-600 mb-6 text-sm font-bold">
-                      AIを使って問題を作るには、APIキーの設定が必要です。
-                  </p>
-                  <div className="flex flex-col gap-3">
-                      <button 
-                        onClick={handleResolveApiKey}
-                        className="w-full py-3 bg-indigo-500 text-white rounded-xl font-black hover:bg-indigo-600 transition-colors shadow-lg flex items-center justify-center gap-2"
-                      >
-                          <Key size={18} />
-                          キーを設定してリトライ
-                      </button>
-                      <button 
-                        onClick={handleReturnHome}
-                        className="w-full py-3 bg-slate-100 text-slate-500 rounded-xl font-bold hover:bg-slate-200 transition-colors"
-                      >
-                          ホームにもどる
-                      </button>
-                  </div>
-                  {/* Billing Link as required by guidelines */}
+                  
+                  {window.aistudio ? (
+                      <>
+                        <p className="text-slate-600 mb-6 text-sm font-bold">
+                            AIを使って問題を作るには、APIキーの設定が必要です。
+                        </p>
+                        <div className="flex flex-col gap-3">
+                            <button 
+                                onClick={handleResolveApiKey}
+                                className="w-full py-3 bg-indigo-500 text-white rounded-xl font-black hover:bg-indigo-600 transition-colors shadow-lg flex items-center justify-center gap-2"
+                            >
+                                <Key size={18} />
+                                キーを設定してリトライ
+                            </button>
+                            <button 
+                                onClick={handleReturnHome}
+                                className="w-full py-3 bg-slate-100 text-slate-500 rounded-xl font-bold hover:bg-slate-200 transition-colors"
+                            >
+                                ホームにもどる
+                            </button>
+                        </div>
+                      </>
+                  ) : (
+                      <>
+                        <div className="bg-slate-50 p-4 rounded-xl text-left mb-6 border border-slate-200">
+                            <p className="text-slate-600 text-sm font-bold mb-2">
+                                環境変数の設定を確認してください
+                            </p>
+                            <p className="text-xs text-slate-500 leading-relaxed">
+                                Vercel等で実行する場合は、環境変数に以下を設定してください：
+                            </p>
+                            <code className="block bg-slate-200 text-slate-700 text-xs p-2 rounded mt-2 font-mono select-all">
+                                NEXT_PUBLIC_API_KEY
+                            </code>
+                            <p className="text-[10px] text-slate-400 mt-2">
+                                ※通常のAPI_KEYはブラウザからアクセスできない場合があります。
+                            </p>
+                        </div>
+                        <button 
+                            onClick={handleReturnHome}
+                            className="w-full py-3 bg-slate-100 text-slate-500 rounded-xl font-bold hover:bg-slate-200 transition-colors"
+                        >
+                            ホームにもどる
+                        </button>
+                      </>
+                  )}
+
                   <div className="mt-4 text-[10px] text-slate-400">
                       <a href="https://ai.google.dev/gemini-api/docs/billing" target="_blank" rel="noopener noreferrer" className="underline hover:text-slate-500">
                           料金について (Google AI Studio)
