@@ -89,7 +89,8 @@ const JapanMap: React.FC<JapanMapProps> = ({
     const el = document.elementFromPoint(currentX, currentY);
     let foundCode: number | null = null;
     
-    if (el && el.tagName === 'path' && el.id.startsWith('pref-')) {
+    // Allow 'path' (land) or 'rect' (Okinawa hitbox)
+    if (el && (el.tagName === 'path' || el.tagName === 'rect') && el.id.startsWith('pref-')) {
         const code = parseInt(el.id.replace('pref-', ''), 10);
         if (!isNaN(code)) {
             foundCode = code;
@@ -167,7 +168,7 @@ const JapanMap: React.FC<JapanMapProps> = ({
         
         // Re-verify we are still over the map (in case zoom shifted it away)
         const checkEl = document.elementFromPoint(lx, ly);
-        const isOverMap = checkEl && checkEl.tagName === 'path' && checkEl.id.startsWith('pref-');
+        const isOverMap = checkEl && (checkEl.tagName === 'path' || checkEl.tagName === 'rect') && checkEl.id.startsWith('pref-');
         
         if (!isOverMap) {
             if (zoomIntervalRef.current) {
@@ -247,7 +248,7 @@ const JapanMap: React.FC<JapanMapProps> = ({
     const el = document.elementFromPoint(e.clientX, e.clientY);
     let targetCode: number | null = null;
 
-    if (el && el.tagName === 'path' && el.id.startsWith('pref-')) {
+    if (el && (el.tagName === 'path' || el.tagName === 'rect') && el.id.startsWith('pref-')) {
         targetCode = parseInt(el.id.replace('pref-', ''), 10);
     }
 
@@ -314,10 +315,19 @@ const JapanMap: React.FC<JapanMapProps> = ({
         >
             {hasPaths && (
                 <>
+                    {/* Okinawa Inset Border */}
                     <rect 
                         x="110" y="110" width="140" height="100" 
                         fill="none" stroke="#cbd5e1" strokeWidth="2" rx="4" 
                         vectorEffect="non-scaling-stroke"
+                    />
+                    {/* Okinawa Hitbox (Transparent Rect for easier dropping) */}
+                    <rect 
+                        id="pref-47-hitbox" 
+                        x="110" y="110" width="140" height="100" 
+                        fill="transparent"
+                        className="cursor-pointer"
+                        style={{ pointerEvents: 'all' }}
                     />
                     <text x="180" y="100" textAnchor="middle" fill="#94a3b8" fontSize="14" fontWeight="bold" style={{fontFamily: 'Zen Maru Gothic'}}>沖縄</text>
                 </>
