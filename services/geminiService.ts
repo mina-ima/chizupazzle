@@ -3,15 +3,42 @@ import { PREFECTURES } from '../constants';
 import { GameMode } from '../types';
 
 const getClient = () => {
-  // Support various environment variable prefixes for Vercel/Vite/CRA/Next.js
-  // This ensures the key is accessible in client-side builds
-  const apiKey = process.env.NEXT_PUBLIC_API_KEY || 
-                 process.env.VITE_API_KEY || 
-                 process.env.REACT_APP_API_KEY || 
-                 process.env.API_KEY;
+  let apiKey = "";
+
+  // 1. Try process.env (Standard Node / Next.js / CRA)
+  try {
+    if (typeof process !== 'undefined' && process.env) {
+      apiKey = process.env.NEXT_PUBLIC_API_KEY || 
+               process.env.VITE_API_KEY || 
+               process.env.REACT_APP_API_KEY || 
+               process.env.API_KEY || "";
+               
+      // If empty, sometimes bundlers replace exact strings but don't populate the process.env object fully.
+      // Explicitly check standard keys.
+      if (!apiKey) {
+          if (process.env.VITE_API_KEY) apiKey = process.env.VITE_API_KEY;
+          else if (process.env.NEXT_PUBLIC_API_KEY) apiKey = process.env.NEXT_PUBLIC_API_KEY;
+      }
+    }
+  } catch (e) {
+    // process might be undefined in some browser envs
+  }
+
+  // 2. Try import.meta.env (Vite standard)
+  if (!apiKey) {
+    try {
+      // @ts-ignore: import.meta is valid in ES modules
+      if (typeof import.meta !== 'undefined' && import.meta.env) {
+        // @ts-ignore
+        apiKey = import.meta.env.VITE_API_KEY || import.meta.env.API_KEY || "";
+      }
+    } catch (e) {
+      // ignore
+    }
+  }
 
   if (!apiKey) {
-    console.error("API_KEY is missing");
+    console.error("GeminiService: API Key is missing. Please check your environment variables (VITE_API_KEY or NEXT_PUBLIC_API_KEY).");
     throw new Error("API Key is required");
   }
   return new GoogleGenAI({ apiKey });

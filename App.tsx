@@ -369,14 +369,26 @@ const App: React.FC = () => {
                             <p className="text-slate-600 text-sm font-bold mb-2">
                                 環境変数の設定を確認してください
                             </p>
-                            <p className="text-xs text-slate-500 leading-relaxed">
-                                Vercel等で実行する場合は、環境変数に以下を設定してください：
+                            <p className="text-xs text-slate-500 leading-relaxed mb-2">
+                                Vercelの設定画面(Settings &gt; Environment Variables)で、以下のキーを追加してください。
                             </p>
-                            <code className="block bg-slate-200 text-slate-700 text-xs p-2 rounded mt-2 font-mono select-all">
-                                NEXT_PUBLIC_API_KEY
-                            </code>
-                            <p className="text-[10px] text-slate-400 mt-2">
-                                ※通常のAPI_KEYはブラウザからアクセスできない場合があります。
+                            
+                            <div className="flex flex-col gap-1 mb-2">
+                                <div className="text-[10px] text-slate-400 font-bold">Viteの場合 (推奨):</div>
+                                <code className="block bg-slate-200 text-slate-700 text-xs p-2 rounded font-mono select-all">
+                                    VITE_API_KEY
+                                </code>
+                            </div>
+
+                            <div className="flex flex-col gap-1">
+                                <div className="text-[10px] text-slate-400 font-bold">Next.jsの場合:</div>
+                                <code className="block bg-slate-200 text-slate-700 text-xs p-2 rounded font-mono select-all">
+                                    NEXT_PUBLIC_API_KEY
+                                </code>
+                            </div>
+
+                            <p className="text-[10px] text-slate-400 mt-3 font-bold">
+                                <span className="text-rose-500">重要:</span> 設定を追加・保存した後に、必ずVercel上で<span className="underline">Redeploy（再デプロイ）</span>を行ってください。
                             </p>
                         </div>
                         <button 
