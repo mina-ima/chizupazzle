@@ -1,4 +1,3 @@
-
 import React, { useState, useMemo, useCallback, useEffect } from 'react';
 import confetti from 'canvas-confetti';
 import { Brain, Map as MapIcon, Sparkles, RefreshCw, Info, Home, Trophy, ArrowDown } from 'lucide-react';
@@ -245,7 +244,7 @@ const App: React.FC = () => {
   // Only show full loading screen if we are IN GAME mode and map is missing
   if (isMapDataLoading) {
      return (
-         <div className="h-screen flex flex-col items-center justify-center bg-orange-50 relative">
+         <div className="h-[100dvh] flex flex-col items-center justify-center bg-orange-50 relative">
              <button 
                 onClick={() => setShowHome(true)}
                 className="absolute top-4 left-4 p-2 rounded-full bg-white/90 backdrop-blur text-slate-500 shadow-lg hover:bg-slate-100 transition-all z-50 border-2 border-white"
@@ -260,7 +259,7 @@ const App: React.FC = () => {
   }
 
   return (
-    <div className="h-screen flex flex-col bg-orange-50 overflow-hidden font-sans">
+    <div className="h-[100dvh] flex flex-col bg-orange-50 overflow-hidden font-sans">
       {/* Header */}
       <header className="bg-white/90 backdrop-blur border-b-4 border-orange-200 z-30 shadow-sm flex-none h-16">
         <div className="h-full px-4 flex items-center justify-between">
@@ -408,8 +407,8 @@ const App: React.FC = () => {
             )}
       </main>
 
-      {/* Bottom Inventory Area - Fixed height or flexible */}
-      <div className="flex-none bg-white border-t-4 border-orange-200 z-20 shadow-[0_-4px_20px_rgba(0,0,0,0.05)] flex flex-col h-[25vh] min-h-[180px] max-h-[300px]">
+      {/* Bottom Inventory Area - Reduced height */}
+      <div className="flex-none bg-white border-t-4 border-orange-200 z-20 shadow-[0_-4px_20px_rgba(0,0,0,0.05)] flex flex-col h-[20vh] min-h-[140px] max-h-[220px]">
         <div className="flex justify-between items-center px-4 py-2 bg-orange-50/80 border-b border-orange-100">
              <div className="flex items-center gap-2 text-sm font-black text-slate-600">
                 <ArrowDown size={16} className="text-orange-400 animate-bounce" />
@@ -418,15 +417,15 @@ const App: React.FC = () => {
              </div>
         </div>
 
-        <div className="flex-1 overflow-x-auto overflow-y-hidden p-4 bg-orange-50/30 custom-scrollbar">
+        <div className="flex-1 overflow-x-auto overflow-y-hidden p-2 bg-orange-50/30 custom-scrollbar">
              {unplacedPieces.length === 0 && !gameState.isLoading && (
                  <div className="h-full flex items-center justify-center text-slate-400 gap-2 font-bold">
                     <Sparkles className="text-yellow-400"/> ぜんぶできたね！
                  </div>
              )}
-             <div className="flex gap-3 h-full items-center px-2">
+             <div className="flex gap-2 h-full items-center px-2">
                 {unplacedPieces.map((piece) => (
-                    <div key={piece.id} className="w-32 md:w-40 flex-shrink-0 h-full pb-2">
+                    <div key={piece.id} className="w-28 md:w-36 flex-shrink-0 h-full pb-1">
                          <Piece
                             piece={piece}
                             onDragStart={setActivePiece}

@@ -1,4 +1,3 @@
-
 import React, { useRef } from 'react';
 import { PuzzlePiece, GameMode } from '../types';
 
@@ -39,7 +38,7 @@ const Piece: React.FC<PieceProps> = ({ piece, onDragStart, onDragEnd, selected, 
   };
 
   const baseClasses = `
-    relative w-full h-full p-2 rounded-2xl border-4 cursor-grab active:cursor-grabbing 
+    relative w-full h-full p-2 rounded-2xl border-2 md:border-4 cursor-grab active:cursor-grabbing 
     transition-all duration-200 flex flex-col items-center justify-center text-center
     hover:-translate-y-1 select-none touch-manipulation
   `;
@@ -76,7 +75,7 @@ const Piece: React.FC<PieceProps> = ({ piece, onDragStart, onDragEnd, selected, 
         onTouchEnd={handleTouchEnd}
         className={`${baseClasses} ${colorClasses}`}
       >
-         <div className="w-full flex-1 flex items-center justify-center p-2">
+         <div className="w-full flex-1 flex items-center justify-center p-1">
              <svg viewBox={viewBox} className="w-full h-full pointer-events-none drop-shadow-sm">
                 <path 
                     d={piece.path} 
@@ -108,10 +107,10 @@ const Piece: React.FC<PieceProps> = ({ piece, onDragStart, onDragEnd, selected, 
       onTouchEnd={handleTouchEnd}
       className={`${baseClasses} ${colorClasses}`}
     >
-      <span className="font-black text-lg leading-snug break-words w-full line-clamp-3">
+      <span className="font-black text-sm md:text-base leading-snug break-words w-full line-clamp-3">
         {piece.content}
       </span>
-      <span className="mt-2 text-[10px] text-slate-300 font-bold absolute bottom-2">
+      <span className="mt-1 text-[10px] text-slate-300 font-bold absolute bottom-1">
           No.{piece.prefectureCode}
       </span>
       {selected && (

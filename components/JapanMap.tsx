@@ -1,4 +1,3 @@
-
 import React, { useState, useRef, useEffect, useMemo, useCallback } from 'react';
 import { Prefecture, PuzzlePiece, GameMode } from '../types';
 import { RefreshCw } from 'lucide-react';
@@ -324,7 +323,6 @@ const JapanMap: React.FC<JapanMapProps> = ({
         viewBox="0 0 1000 1000"
         className="w-full h-full max-w-full max-h-full filter drop-shadow-xl select-none touch-none aspect-square"
         preserveAspectRatio="xMidYMid meet"
-        style={{ maxWidth: '90vh', maxHeight: '90vh' }}
         onDragOver={handleGlobalDragOver}
         onDrop={handleGlobalDrop}
         onTouchStart={handleTouchStart}
