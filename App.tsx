@@ -1,6 +1,6 @@
 import React, { useState, useMemo, useCallback, useEffect } from 'react';
 import confetti from 'canvas-confetti';
-import { Brain, Map as MapIcon, Sparkles, RefreshCw, Info, Home, Trophy, ArrowDown } from 'lucide-react';
+import { Brain, Map as MapIcon, Sparkles, RefreshCw, Info, Home, Trophy, ArrowDown, Key, AlertCircle } from 'lucide-react';
 import { GameMode, GameState, PuzzlePiece, Prefecture } from './types';
 import { PREFECTURES, CAPITALS, GOURMET_DATA, LANDMARK_DATA, MASCOT_DATA, RANKING_DATA, CRAFT_DATA, POPULATION_DATA, AREA_DATA } from './constants';
 import { generateGameContent, getHint } from './services/geminiService';
@@ -8,6 +8,18 @@ import { fetchAndProcessMapData } from './utils/geoUtils';
 import JapanMap from './components/JapanMap';
 import Piece from './components/Piece';
 import HomeScreen from './components/HomeScreen';
+
+// Add global declaration for AI Studio environment
+declare global {
+  interface AIStudio {
+    hasSelectedApiKey: () => Promise<boolean>;
+    openSelectKey: () => Promise<void>;
+  }
+
+  interface Window {
+    aistudio?: AIStudio;
+  }
+}
 
 const App: React.FC = () => {
   const [showHome, setShowHome] = useState(true);
@@ -32,6 +44,7 @@ const App: React.FC = () => {
   const [hint, setHint] = useState<string | null>(null);
   const [isHintLoading, setIsHintLoading] = useState(false);
   const [lastCorrect, setLastCorrect] = useState<{name: string, sub: string} | null>(null);
+  const [apiKeyError, setApiKeyError] = useState(false);
 
   // Load Map Data
   const loadMapData = useCallback(async () => {
@@ -67,12 +80,39 @@ const App: React.FC = () => {
         return;
     }
 
-    setShowHome(false);
-    setGameState(prev => ({ ...prev, isLoading: true, isComplete: false, placedCount: 0, pieces: [], startTime: Date.now(), endTime: null, mode, customTopic: topic }));
+    // Reset states
+    setApiKeyError(false);
     setMessage(null);
     setHint(null);
     setActivePiece(null);
     setLastCorrect(null);
+    setShowHome(false);
+    
+    // Proactively check for API key if using AI modes
+    if ([GameMode.SOUVENIR, GameMode.CUSTOM].includes(mode)) {
+        if (window.aistudio) {
+            try {
+                const hasKey = await window.aistudio.hasSelectedApiKey();
+                if (!hasKey) {
+                    await window.aistudio.openSelectKey();
+                }
+            } catch (e) {
+                console.error("Failed to check/open API key selector", e);
+            }
+        }
+    }
+
+    setGameState(prev => ({ 
+        ...prev, 
+        isLoading: true, 
+        isComplete: false, 
+        placedCount: 0, 
+        pieces: [], 
+        startTime: Date.now(), 
+        endTime: null, 
+        mode, 
+        customTopic: topic 
+    }));
 
     let newPieces: PuzzlePiece[] = [];
 
@@ -150,15 +190,20 @@ const App: React.FC = () => {
       setGameState(prev => ({ ...prev, isLoading: false }));
       
       const isApiKeyError = error?.message?.includes("API Key") || error?.message?.includes("API_KEY");
-      setMessage(isApiKeyError ? "APIキーの設定を確認してね" : "えらーがおきました。もういちどためしてね。");
       
-      setTimeout(() => setShowHome(true), 4000);
+      if (isApiKeyError) {
+          setApiKeyError(true);
+      } else {
+          setMessage("えらーがおきました。もういちどためしてね。");
+          setTimeout(() => setShowHome(true), 4000);
+      }
     }
   }, [prefecturesData, isMapDataLoading]);
 
   const handleReturnHome = () => {
     setShowHome(true);
     setGameState(prev => ({ ...prev, isComplete: false, placedCount: 0, pieces: [] }));
+    setApiKeyError(false);
   };
 
   const handlePieceDrop = (regionCode: number) => {
@@ -220,17 +265,47 @@ const App: React.FC = () => {
         setTimeout(() => setMessage(null), 2000);
         return;
     }
+    
+    // Proactively check key for hints too
+    if (window.aistudio) {
+        const hasKey = await window.aistudio.hasSelectedApiKey();
+        if (!hasKey) {
+            await window.aistudio.openSelectKey();
+            // Don't return, try to proceed, if it fails catch block will handle
+        }
+    }
+
     setIsHintLoading(true);
     const pref = prefecturesData.find(p => p.code === activePiece.prefectureCode);
     if (pref) {
         try {
             const hintText = await getHint(pref.name, gameState.mode, activePiece.content);
             setHint(hintText);
-        } catch (e) {
-            setHint("ヒントがだせませんでした。");
+        } catch (e: any) {
+             const isApiKeyError = e?.message?.includes("API Key") || e?.message?.includes("API_KEY");
+             if (isApiKeyError) {
+                 setApiKeyError(true);
+             } else {
+                 setHint("ヒントがだせませんでした。");
+             }
         }
     }
     setIsHintLoading(false);
+  };
+
+  const handleResolveApiKey = async () => {
+      if (window.aistudio) {
+          try {
+            await window.aistudio.openSelectKey();
+            // Retry the game initialization after key selection
+            initializeGame(gameState.mode, gameState.customTopic);
+          } catch (e) {
+            console.error("API key selection cancelled or failed", e);
+          }
+      } else {
+          // Fallback if not in AI Studio environment (shouldn't happen based on context)
+          alert("API Key configuration is not available in this environment.");
+      }
   };
 
   const unplacedPieces = useMemo(() => gameState.pieces.filter(p => !p.isPlaced), [gameState.pieces]);
@@ -259,7 +334,44 @@ const App: React.FC = () => {
   }
 
   return (
-    <div className="h-[100dvh] flex flex-col bg-orange-50 overflow-hidden font-sans">
+    <div className="h-[100dvh] flex flex-col bg-orange-50 overflow-hidden font-sans relative">
+      
+      {/* API Key Error Modal */}
+      {apiKeyError && (
+          <div className="absolute inset-0 z-[100] bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 animate-in fade-in duration-200">
+              <div className="bg-white rounded-3xl p-8 max-w-sm w-full text-center shadow-2xl border-4 border-rose-200">
+                  <div className="bg-rose-100 w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-4">
+                      <AlertCircle className="w-8 h-8 text-rose-500" />
+                  </div>
+                  <h3 className="text-xl font-black text-slate-800 mb-2">APIキーが必要です</h3>
+                  <p className="text-slate-600 mb-6 text-sm font-bold">
+                      AIを使って問題を作るには、APIキーの設定が必要です。
+                  </p>
+                  <div className="flex flex-col gap-3">
+                      <button 
+                        onClick={handleResolveApiKey}
+                        className="w-full py-3 bg-indigo-500 text-white rounded-xl font-black hover:bg-indigo-600 transition-colors shadow-lg flex items-center justify-center gap-2"
+                      >
+                          <Key size={18} />
+                          キーを設定してリトライ
+                      </button>
+                      <button 
+                        onClick={handleReturnHome}
+                        className="w-full py-3 bg-slate-100 text-slate-500 rounded-xl font-bold hover:bg-slate-200 transition-colors"
+                      >
+                          ホームにもどる
+                      </button>
+                  </div>
+                  {/* Billing Link as required by guidelines */}
+                  <div className="mt-4 text-[10px] text-slate-400">
+                      <a href="https://ai.google.dev/gemini-api/docs/billing" target="_blank" rel="noopener noreferrer" className="underline hover:text-slate-500">
+                          料金について (Google AI Studio)
+                      </a>
+                  </div>
+              </div>
+          </div>
+      )}
+
       {/* Header */}
       <header className="bg-white/90 backdrop-blur border-b-4 border-orange-200 z-30 shadow-sm flex-none h-16">
         <div className="h-full px-4 flex items-center justify-between">
@@ -354,10 +466,12 @@ const App: React.FC = () => {
                  </div>
             )}
 
-            {/* Error Message */}
-            {message && (
-                <div className="absolute top-10 left-1/2 transform -translate-x-1/2 z-50 bg-rose-500 text-white px-6 py-3 rounded-full shadow-xl font-black text-lg animate-bounce border-4 border-white whitespace-nowrap">
-                    {message}
+            {/* Error Message (General) */}
+            {message && !apiKeyError && (
+                <div className="absolute top-10 left-1/2 transform -translate-x-1/2 z-50 w-full flex justify-center px-4">
+                    <div className="bg-rose-500 text-white px-6 py-3 rounded-full shadow-xl font-black text-lg animate-bounce border-4 border-white flex items-center gap-4 max-w-full flex-wrap justify-center">
+                        <span>{message}</span>
+                    </div>
                 </div>
             )}
 
