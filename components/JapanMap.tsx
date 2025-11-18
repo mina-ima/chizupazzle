@@ -1,3 +1,4 @@
+
 import React, { useState, useRef, useEffect, useMemo, useCallback } from 'react';
 import { Prefecture, PuzzlePiece, GameMode } from '../types';
 import { RefreshCw } from 'lucide-react';
@@ -224,7 +225,7 @@ const JapanMap: React.FC<JapanMapProps> = ({
             };
         });
 
-      }, 1000); // Slower interval (1 second)
+      }, 800); // Faster interval for better responsiveness (0.8s)
     }
   }, [activePiece, hoveredRegionCode, zoom.scale, prefectures]);
 

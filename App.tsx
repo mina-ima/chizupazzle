@@ -245,7 +245,14 @@ const App: React.FC = () => {
   // Only show full loading screen if we are IN GAME mode and map is missing
   if (isMapDataLoading) {
      return (
-         <div className="h-screen flex flex-col items-center justify-center bg-orange-50">
+         <div className="h-screen flex flex-col items-center justify-center bg-orange-50 relative">
+             <button 
+                onClick={() => setShowHome(true)}
+                className="absolute top-4 left-4 p-2 rounded-full bg-white/90 backdrop-blur text-slate-500 shadow-lg hover:bg-slate-100 transition-all z-50 border-2 border-white"
+                title="ホームにもどる"
+             >
+                <Home size={24} />
+            </button>
              <div className="w-16 h-16 border-4 border-indigo-200 border-t-indigo-500 rounded-full animate-spin mb-4"></div>
              <p className="text-slate-600 font-bold animate-pulse">地図データを準備中...</p>
          </div>
