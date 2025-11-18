@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect, useMemo } from 'react';
+import React, { useState, useRef, useEffect, useMemo, useCallback } from 'react';
 import { Prefecture, PuzzlePiece, GameMode } from '../types';
 import { RefreshCw } from 'lucide-react';
 
@@ -73,12 +73,8 @@ const JapanMap: React.FC<JapanMapProps> = ({
     });
   }, [prefectures, placedPieces, hoveredRegionCode]);
 
-  const handleGlobalDragOver = (e: React.DragEvent) => {
-    e.preventDefault();
-    
-    const currentX = e.clientX;
-    const currentY = e.clientY;
-    
+  // Shared interaction logic for DragOver, TouchMove, and MouseMove
+  const processInteraction = useCallback((currentX: number, currentY: number) => {
     // Initialize lastMousePos if it's the first event
     if (lastMousePosRef.current.x === 0 && lastMousePosRef.current.y === 0) {
         lastMousePosRef.current = { x: currentX, y: currentY };
@@ -126,11 +122,11 @@ const JapanMap: React.FC<JapanMapProps> = ({
 
             if (prevIdx >= 0) {
                 const newScale = ZOOM_LEVELS[prevIdx];
-                setZoom({
+                setZoom(prev => ({
                     scale: newScale,
-                    x: newScale === 1 ? 500 : zoom.x, 
-                    y: newScale === 1 ? 500 : zoom.y
-                });
+                    x: newScale === 1 ? 500 : prev.x, 
+                    y: newScale === 1 ? 500 : prev.y
+                }));
                 zoomTriggerPosRef.current = { x: currentX, y: currentY };
             }
             
@@ -230,6 +226,35 @@ const JapanMap: React.FC<JapanMapProps> = ({
 
       }, 1000); // Slower interval (1 second)
     }
+  }, [activePiece, hoveredRegionCode, zoom.scale, prefectures]);
+
+
+  const handleGlobalDragOver = (e: React.DragEvent) => {
+    e.preventDefault();
+    processInteraction(e.clientX, e.clientY);
+  };
+
+  // Touch handlers for tablet/mobile support (Selection Mode)
+  const handleTouchMove = (e: React.TouchEvent) => {
+    if (activePiece) {
+        const touch = e.touches[0];
+        processInteraction(touch.clientX, touch.clientY);
+    }
+  };
+
+  const handleTouchStart = (e: React.TouchEvent) => {
+    if (activePiece) {
+        const touch = e.touches[0];
+        // Reset last pos to avoid jump calculation
+        lastMousePosRef.current = { x: touch.clientX, y: touch.clientY };
+        processInteraction(touch.clientX, touch.clientY);
+    }
+  };
+
+  const handleMouseMove = (e: React.MouseEvent) => {
+      if (activePiece) {
+          processInteraction(e.clientX, e.clientY);
+      }
   };
 
   // Global drop handler attached to SVG to ensure reliable hit testing even during animation
@@ -301,6 +326,9 @@ const JapanMap: React.FC<JapanMapProps> = ({
         style={{ maxWidth: '90vh', maxHeight: '90vh' }}
         onDragOver={handleGlobalDragOver}
         onDrop={handleGlobalDrop}
+        onTouchStart={handleTouchStart}
+        onTouchMove={handleTouchMove}
+        onMouseMove={handleMouseMove}
       >
         {/* Transparent background to catch drag events over ocean */}
         <rect x="0" y="0" width="1000" height="1000" fill="transparent" />
@@ -328,6 +356,7 @@ const JapanMap: React.FC<JapanMapProps> = ({
                         fill="transparent"
                         className="cursor-pointer"
                         style={{ pointerEvents: 'all' }}
+                        onClick={() => handleClick(47)}
                     />
                     <text x="180" y="100" textAnchor="middle" fill="#94a3b8" fontSize="14" fontWeight="bold" style={{fontFamily: 'Zen Maru Gothic'}}>沖縄</text>
                 </>
