@@ -146,11 +146,14 @@ const App: React.FC = () => {
         pieces: newPieces,
         isLoading: false
       }));
-    } catch (error) {
+    } catch (error: any) {
       console.error("Init error", error);
       setGameState(prev => ({ ...prev, isLoading: false }));
-      setMessage("えらーがおきました。もういちどためしてね。");
-      setTimeout(() => setShowHome(true), 3000);
+      
+      const isApiKeyError = error?.message?.includes("API Key") || error?.message?.includes("API_KEY");
+      setMessage(isApiKeyError ? "APIキーの設定を確認してね" : "えらーがおきました。もういちどためしてね。");
+      
+      setTimeout(() => setShowHome(true), 4000);
     }
   }, [prefecturesData, isMapDataLoading]);
 
@@ -311,18 +314,23 @@ const App: React.FC = () => {
                 </div>
             )}
 
-            {/* Desktop Hint/Status overlay (Floating) */}
-            <div className="absolute top-4 left-4 z-20 hidden md:flex flex-col gap-2 pointer-events-none">
+            {/* Desktop/Mobile Hint/Status overlay (Floating) */}
+            <div className="absolute top-4 left-4 z-20 flex flex-col gap-2 pointer-events-none max-w-[60%] md:max-w-xs">
                  {activePiece && (
                     <div className="pointer-events-auto bg-white/90 backdrop-blur p-3 rounded-2xl shadow-lg border-2 border-white animate-in slide-in-from-left-2">
                         <div className="text-xs font-bold text-slate-400 mb-1">いまもってるピース</div>
                         <div className="font-bold text-lg text-slate-800 text-center whitespace-pre-line leading-tight">
                             {gameState.mode === GameMode.SHAPE ? "このかたち" : activePiece.content}
                         </div>
+                        
+                        <div className="mt-2 mb-2 text-xs font-bold text-center text-indigo-500 bg-indigo-50 py-1 rounded border border-indigo-100 animate-pulse">
+                            地図をタップして配置！
+                        </div>
+
                          <button 
                             onClick={handleGetHint}
                             disabled={isHintLoading}
-                            className="mt-2 w-full text-xs font-bold flex items-center justify-center gap-1 bg-amber-400 text-white py-1.5 rounded-lg hover:bg-amber-500 transition-colors"
+                            className="mt-2 w-full text-xs font-bold flex items-center justify-center gap-1 bg-amber-400 text-white py-1.5 rounded-lg hover:bg-amber-500 transition-colors shadow-sm"
                         >
                             {isHintLoading ? <RefreshCw className="animate-spin w-3 h-3"/> : <Sparkles className="w-3 h-3"/>}
                             ヒント
@@ -401,16 +409,6 @@ const App: React.FC = () => {
                 <span>のこりのピース</span>
                 <span className="bg-orange-200 text-orange-800 text-xs px-2 py-0.5 rounded-full">{unplacedPieces.length}</span>
              </div>
-              {/* Mobile Hint Button in bar */}
-             {activePiece && (
-                <button 
-                    onClick={handleGetHint}
-                    disabled={isHintLoading}
-                    className="md:hidden bg-amber-400 text-white px-3 py-1 rounded-full text-xs font-bold flex items-center gap-1 shadow-sm"
-                >
-                    <Sparkles size={12}/> ヒント
-                </button>
-            )}
         </div>
 
         <div className="flex-1 overflow-x-auto overflow-y-hidden p-4 bg-orange-50/30 custom-scrollbar">

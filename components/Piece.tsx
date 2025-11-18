@@ -1,5 +1,5 @@
 
-import React from 'react';
+import React, { useRef } from 'react';
 import { PuzzlePiece, GameMode } from '../types';
 
 interface PieceProps {
@@ -12,6 +12,8 @@ interface PieceProps {
 }
 
 const Piece: React.FC<PieceProps> = ({ piece, onDragStart, onDragEnd, selected, onSelect, mode }) => {
+  const lastTapRef = useRef(0);
+
   const handleDragStart = (e: React.DragEvent) => {
     e.dataTransfer.setData('text/plain', piece.id.toString());
     e.dataTransfer.effectAllowed = 'move';
@@ -23,10 +25,23 @@ const Piece: React.FC<PieceProps> = ({ piece, onDragStart, onDragEnd, selected, 
     onDragEnd();
   };
 
+  // Double tap detection for touch devices
+  const handleTouchEnd = (e: React.TouchEvent) => {
+    const now = Date.now();
+    const DOUBLE_TAP_DELAY = 300;
+    
+    if (now - lastTapRef.current < DOUBLE_TAP_DELAY) {
+      // Double tap detected
+      e.preventDefault(); // Prevent default zoom behavior
+      onSelect(piece);
+    }
+    lastTapRef.current = now;
+  };
+
   const baseClasses = `
     relative w-full h-full p-2 rounded-2xl border-4 cursor-grab active:cursor-grabbing 
     transition-all duration-200 flex flex-col items-center justify-center text-center
-    hover:-translate-y-1 select-none
+    hover:-translate-y-1 select-none touch-manipulation
   `;
 
   const colorClasses = selected 
@@ -58,6 +73,7 @@ const Piece: React.FC<PieceProps> = ({ piece, onDragStart, onDragEnd, selected, 
         onDragStart={handleDragStart}
         onDragEnd={handleDragEnd}
         onClick={() => onSelect(piece)}
+        onTouchEnd={handleTouchEnd}
         className={`${baseClasses} ${colorClasses}`}
       >
          <div className="w-full flex-1 flex items-center justify-center p-2">
@@ -74,6 +90,11 @@ const Piece: React.FC<PieceProps> = ({ piece, onDragStart, onDragEnd, selected, 
          <span className="text-[10px] text-slate-400 font-bold bg-slate-100 px-2 py-0.5 rounded-full mb-1">
              #{piece.prefectureCode}
          </span>
+         {selected && (
+            <div className="absolute -top-2 -right-2 bg-indigo-500 text-white text-[10px] font-bold px-2 py-1 rounded-full animate-bounce shadow-md z-10">
+                選択中
+            </div>
+         )}
       </div>
     );
   }
@@ -84,6 +105,7 @@ const Piece: React.FC<PieceProps> = ({ piece, onDragStart, onDragEnd, selected, 
       onDragStart={handleDragStart}
       onDragEnd={handleDragEnd}
       onClick={() => onSelect(piece)}
+      onTouchEnd={handleTouchEnd}
       className={`${baseClasses} ${colorClasses}`}
     >
       <span className="font-black text-lg leading-snug break-words w-full line-clamp-3">
@@ -92,6 +114,11 @@ const Piece: React.FC<PieceProps> = ({ piece, onDragStart, onDragEnd, selected, 
       <span className="mt-2 text-[10px] text-slate-300 font-bold absolute bottom-2">
           No.{piece.prefectureCode}
       </span>
+      {selected && (
+        <div className="absolute -top-2 -right-2 bg-indigo-500 text-white text-[10px] font-bold px-2 py-1 rounded-full animate-bounce shadow-md z-10">
+            選択中
+        </div>
+      )}
     </div>
   );
 };
