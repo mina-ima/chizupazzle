@@ -1,0 +1,5 @@
+{
+  "name": "Japan Map Puzzle AI",
+  "description": "An interactive Japan map puzzle game where you place prefectures based on shapes, names, or AI-generated cultural clues.",
+  "requestFramePermissions": []
+}
