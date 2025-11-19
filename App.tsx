@@ -189,7 +189,8 @@ const App: React.FC = () => {
       }));
 
       // --- Start background image fetching for visual modes ---
-      const visualModes = [GameMode.MASCOT, GameMode.LANDMARK, GameMode.GOURMET, GameMode.CRAFT, GameMode.SOUVENIR, GameMode.CUSTOM];
+      // POPULATION and AREA are text-heavy and images (charts/tables) aren't usually available via simple search, so we skip.
+      const visualModes = [GameMode.MASCOT, GameMode.LANDMARK, GameMode.GOURMET, GameMode.CRAFT, GameMode.SOUVENIR, GameMode.CUSTOM, GameMode.RANKING];
       
       if (visualModes.includes(mode)) {
         const fetchImages = async () => {
@@ -209,8 +210,8 @@ const App: React.FC = () => {
                     const pref = prefecturesData.find(p => p.code === piece.prefectureCode);
                     const context = pref ? pref.name : '';
                     
-                    // Fetch
-                    const url = await fetchImageForKeyword(piece.content, context);
+                    // Fetch with mode awareness
+                    const url = await fetchImageForKeyword(piece.content, context, mode);
                     if (url) {
                         return { id: piece.id, url };
                     }
