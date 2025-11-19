@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect, useMemo, useCallback } from 'react';
 import { Prefecture, PuzzlePiece, GameMode } from '../types';
-import { RefreshCw } from 'lucide-react';
+import { RefreshCw, ZoomIn, ZoomOut, Maximize } from 'lucide-react';
 
 interface JapanMapProps {
   prefectures: Prefecture[];
@@ -38,14 +38,25 @@ const JapanMap: React.FC<JapanMapProps> = ({
   const zoomTriggerPosRef = useRef<{x: number, y: number} | null>(null);
   const containerRef = useRef<HTMLDivElement>(null);
 
-  // Reset zoom when piece is dropped or cancelled
-  // Also reset when activePiece changes (to ensure new piece drag starts fresh)
+  // Pinch Zoom Refs
+  const pinchRef = useRef<{
+    startDist: number;
+    startScale: number;
+    startCenter: { x: number, y: number }; // Screen coordinates
+    startZoom: ZoomState;
+  } | null>(null);
+
+  // Reset zoom when piece is dropped or cancelled (only if not manually zoomed via pinch)
+  // We want to keep the zoom level if the user manually adjusted it to find a spot.
+  // But if the activePiece becomes null (drop finished), we might want to reset IF we were in auto-zoom mode.
+  // For simplicity in this hybrid mode, we reset on piece change ONLY if scale is 1 (fresh start) or if needed.
+  // Actually, keeping zoom context is better for gameplay. Let's NOT auto-reset zoom on activePiece change if touched.
   useEffect(() => {
     if (!activePiece) {
       if (zoomIntervalRef.current) clearInterval(zoomIntervalRef.current);
-      setZoom({ scale: 1, x: 500, y: 500 });
       zoomTriggerPosRef.current = null;
       lastMousePosRef.current = { x: 0, y: 0 };
+      // Note: We do NOT reset zoom here to allow users to admire their work or stay zoomed in
     } else {
         // Reset internal trackers for new piece
         lastMousePosRef.current = { x: 0, y: 0 };
@@ -73,63 +84,58 @@ const JapanMap: React.FC<JapanMapProps> = ({
     });
   }, [prefectures, placedPieces, hoveredRegionCode]);
 
-  // Shared interaction logic for DragOver, TouchMove, and MouseMove
-  const processInteraction = useCallback((currentX: number, currentY: number) => {
+  // --- Mouse Interaction Logic (Desktop Auto-Zoom) ---
+  const processMouseInteraction = useCallback((currentX: number, currentY: number) => {
+    // Skip auto-zoom logic if user is pinching
+    if (pinchRef.current) return;
+
     // Initialize lastMousePos if it's the first event
     if (lastMousePosRef.current.x === 0 && lastMousePosRef.current.y === 0) {
         lastMousePosRef.current = { x: currentX, y: currentY };
     }
 
-    // 1. Hit Testing using elementFromPoint
-    // This is more reliable than onDragEnter during transforms/scaling
+    // Hit Testing
     const el = document.elementFromPoint(currentX, currentY);
     let foundCode: number | null = null;
-    
-    // Allow 'path' (land) or 'rect' (Okinawa hitbox)
     if (el && (el.tagName === 'path' || el.tagName === 'rect') && el.id.startsWith('pref-')) {
         const code = parseInt(el.id.replace('pref-', ''), 10);
-        if (!isNaN(code)) {
-            foundCode = code;
-        }
+        if (!isNaN(code)) foundCode = code;
     }
     
-    // Only update state if changed to avoid excessive re-renders
     if (foundCode !== hoveredRegionCode) {
         setHoveredRegionCode(foundCode);
     }
 
-    // 2. Zoom Logic
-    // Calculate movement distance since last event
+    // Zoom Logic (Auto-zoom on hover for mouse)
+    // Only active if we haven't manually zoomed via pinch (heuristic: generic zoom levels)
+    // If the user is using touch, we generally want to disable this auto-zoom behavior 
+    // because it interferes with manual pinch/pan.
+    // We'll check event type in the calling handlers or rely on the fact that touch triggers handleTouchMove.
+    
     const dx = currentX - lastMousePosRef.current.x;
     const dy = currentY - lastMousePosRef.current.y;
     const dist = Math.hypot(dx, dy);
-    
     lastMousePosRef.current = { x: currentX, y: currentY };
 
-    // ------------------------------------------
-    // Zoom OUT Logic
-    // ------------------------------------------
+    // Auto zoom-out logic
     if (zoom.scale > 1 && zoomTriggerPosRef.current) {
         const distFromAnchor = Math.hypot(
             currentX - zoomTriggerPosRef.current.x,
             currentY - zoomTriggerPosRef.current.y
         );
-        
-        // Threshold: 150px radius movement resets zoom level down
         if (distFromAnchor > 150) {
-            const currentIdx = ZOOM_LEVELS.indexOf(zoom.scale);
-            const prevIdx = currentIdx - 1;
+            const currentIdx = ZOOM_LEVELS.indexOf(zoom.scale); // Might be -1 if custom zoomed
+            // If custom zoomed, just zoom out to nearest level
+            let newScale = 1;
+            if (currentIdx > 0) newScale = ZOOM_LEVELS[currentIdx - 1];
+            else if (currentIdx === -1 && zoom.scale > 1) newScale = 1;
 
-            if (prevIdx >= 0) {
-                const newScale = ZOOM_LEVELS[prevIdx];
-                setZoom(prev => ({
-                    scale: newScale,
-                    x: newScale === 1 ? 500 : prev.x, 
-                    y: newScale === 1 ? 500 : prev.y
-                }));
-                zoomTriggerPosRef.current = { x: currentX, y: currentY };
-            }
-            
+            setZoom(prev => ({
+                scale: newScale,
+                x: newScale === 1 ? 500 : prev.x, 
+                y: newScale === 1 ? 500 : prev.y
+            }));
+            zoomTriggerPosRef.current = { x: currentX, y: currentY };
             if (zoomIntervalRef.current) {
                 clearInterval(zoomIntervalRef.current);
                 zoomIntervalRef.current = null;
@@ -138,31 +144,23 @@ const JapanMap: React.FC<JapanMapProps> = ({
         }
     }
 
-    // ------------------------------------------
-    // Zoom IN Logic (Continuous)
-    // ------------------------------------------
-    
-    // If moving significantly (shaking mouse or traversing), cancel zoom interval
+    // Auto zoom-in logic (Only if moving slowly and over a target)
     if (dist > 20) { 
         if (zoomIntervalRef.current) {
           clearInterval(zoomIntervalRef.current);
           zoomIntervalRef.current = null;
         }
-        return; // Exit to prevent immediate restart
+        return; 
     }
 
-    const maxLevel = ZOOM_LEVELS[ZOOM_LEVELS.length - 1];
-
-    // Trigger zoom LOOP if hovering over a region and not already zooming
-    if (!zoomIntervalRef.current && activePiece && foundCode && zoom.scale < maxLevel) {
-      
-      // Start a repeating interval to handle continuous zoom while holding still
+    // Trigger zoom interval
+    if (!zoomIntervalRef.current && activePiece && foundCode && zoom.scale < 12) {
       zoomIntervalRef.current = setInterval(() => {
-        
-        // Inside the interval, we must use the LATEST known mouse position
         const { x: lx, y: ly } = lastMousePosRef.current;
         
-        // Re-verify we are still over the map (in case zoom shifted it away)
+        // Only auto-zoom if NOT pinching
+        if (pinchRef.current) return;
+
         const checkEl = document.elementFromPoint(lx, ly);
         const isOverMap = checkEl && (checkEl.tagName === 'path' || checkEl.tagName === 'rect') && checkEl.id.startsWith('pref-');
         
@@ -174,118 +172,182 @@ const JapanMap: React.FC<JapanMapProps> = ({
             return;
         }
 
-        // Identify the target prefecture to center on
         const codeStr = checkEl.id.replace('pref-', '');
         const targetCode = parseInt(codeStr, 10);
         const targetPref = prefectures.find(p => p.code === targetCode);
 
         setZoom(prevZoom => {
-            const currentIdx = ZOOM_LEVELS.indexOf(prevZoom.scale);
-            const nextIdx = currentIdx + 1;
-
-            // Stop if we reach max level
-            if (nextIdx >= ZOOM_LEVELS.length) {
-                if (zoomIntervalRef.current) {
-                    clearInterval(zoomIntervalRef.current);
-                    zoomIntervalRef.current = null;
-                }
-                return prevZoom;
+             // Find next logical zoom level
+            let nextScale = ZOOM_LEVELS.find(z => z > prevZoom.scale);
+            if (!nextScale) {
+                 if (prevZoom.scale < 12) nextScale = 12;
+                 else return prevZoom;
             }
 
-            const newScale = ZOOM_LEVELS[nextIdx];
-            
             let newCenterX = prevZoom.x;
             let newCenterY = prevZoom.y;
 
-            // Logic change: Center on the detected prefecture instead of mouse position
             if (targetPref && targetPref.centerX && targetPref.centerY) {
                 newCenterX = targetPref.centerX;
                 newCenterY = targetPref.centerY;
             } else {
-                // Fallback: If for some reason center is missing, use mouse logic (Fixed Point Zoom Math)
+                 // Fallback logic
                 const rect = containerRef.current?.getBoundingClientRect();
                 if (rect) {
                     const mouseNormX = ((lx - rect.left) / rect.width) * 1000;
                     const mouseNormY = ((ly - rect.top) / rect.height) * 1000;
                     const currentMapX = prevZoom.x + (mouseNormX - 500) / prevZoom.scale;
                     const currentMapY = prevZoom.y + (mouseNormY - 500) / prevZoom.scale;
-                    newCenterX = currentMapX - (mouseNormX - 500) / newScale;
-                    newCenterY = currentMapY - (mouseNormY - 500) / newScale;
+                    newCenterX = currentMapX - (mouseNormX - 500) / nextScale;
+                    newCenterY = currentMapY - (mouseNormY - 500) / nextScale;
                 }
             }
-
-            // Update the anchor so Zoom Out logic knows where we are
             zoomTriggerPosRef.current = { x: lx, y: ly };
-
-            return {
-                scale: newScale,
-                x: newCenterX,
-                y: newCenterY
-            };
+            return { scale: nextScale, x: newCenterX, y: newCenterY };
         });
-
-      }, 800); // Faster interval for better responsiveness (0.8s)
+      }, 800); 
     }
   }, [activePiece, hoveredRegionCode, zoom.scale, prefectures]);
 
+  // --- Touch Interaction Logic (Pinch & Pan) ---
 
-  const handleGlobalDragOver = (e: React.DragEvent) => {
-    e.preventDefault();
-    processInteraction(e.clientX, e.clientY);
+  const getTouchDistance = (touches: React.TouchList) => {
+    return Math.hypot(
+      touches[0].clientX - touches[1].clientX,
+      touches[0].clientY - touches[1].clientY
+    );
   };
 
-  // Touch handlers for tablet/mobile support (Selection Mode)
-  const handleTouchMove = (e: React.TouchEvent) => {
-    if (activePiece) {
-        const touch = e.touches[0];
-        processInteraction(touch.clientX, touch.clientY);
-    }
+  const getTouchCenter = (touches: React.TouchList) => {
+    return {
+      x: (touches[0].clientX + touches[1].clientX) / 2,
+      y: (touches[0].clientY + touches[1].clientY) / 2
+    };
   };
 
   const handleTouchStart = (e: React.TouchEvent) => {
-    if (activePiece) {
+    if (e.touches.length === 2) {
+        // Start Pinch/Pan
+        e.preventDefault(); // Prevent browser zoom
+        const dist = getTouchDistance(e.touches);
+        const center = getTouchCenter(e.touches);
+        
+        // Stop any auto-zoom
+        if (zoomIntervalRef.current) {
+            clearInterval(zoomIntervalRef.current);
+            zoomIntervalRef.current = null;
+        }
+
+        pinchRef.current = {
+            startDist: dist,
+            startScale: zoom.scale,
+            startCenter: center,
+            startZoom: { ...zoom }
+        };
+    } else if (e.touches.length === 1 && activePiece) {
+        // Start dragging piece logic
         const touch = e.touches[0];
-        // Reset last pos to avoid jump calculation
         lastMousePosRef.current = { x: touch.clientX, y: touch.clientY };
-        processInteraction(touch.clientX, touch.clientY);
+        processMouseInteraction(touch.clientX, touch.clientY);
     }
+  };
+
+  const handleTouchMove = (e: React.TouchEvent) => {
+    // 2-finger Zoom/Pan
+    if (e.touches.length === 2 && pinchRef.current) {
+        e.preventDefault();
+        const { startDist, startScale, startCenter, startZoom } = pinchRef.current;
+        
+        const currentDist = getTouchDistance(e.touches);
+        const currentCenter = getTouchCenter(e.touches);
+
+        // 1. Calculate New Scale
+        let newScale = startScale * (currentDist / startDist);
+        // Clamp scale
+        newScale = Math.max(1, Math.min(newScale, 15));
+
+        // 2. Calculate Pan (Translation)
+        // Movement of fingers on screen
+        const dx = currentCenter.x - startCenter.x;
+        const dy = currentCenter.y - startCenter.y;
+
+        // Convert screen movement to map units
+        // The map is 1000x1000 logic. We need to know how many pixels is 1 map unit.
+        const rect = containerRef.current?.getBoundingClientRect();
+        if (!rect) return;
+        
+        const screenToMapRatio = 1000 / rect.width; // e.g., 2.5 map units per pixel
+        
+        // The shift in map center (zoom.x/y) needs to be opposite to finger movement
+        // AND adjusted for scale.
+        const mapShiftX = (dx * screenToMapRatio) / newScale;
+        const mapShiftY = (dy * screenToMapRatio) / newScale;
+
+        // 3. Zoom Focus Adjustment
+        // When zooming, we want to zoom "towards" the midpoint of fingers.
+        // Logic: The point under the fingers (StartCenter) should stay under the fingers.
+        // Current implementation centers on (zoom.x, zoom.y).
+        // Complex math simplified: We rely mainly on panning the center relative to the scale change.
+        // For true "zoom to point", we need to adjust center based on offset from center screen.
+        
+        // Basic Pan Implementation (Good enough combined with scale)
+        // Just update based on startZoom
+        
+        setZoom({
+            scale: newScale,
+            x: startZoom.x - mapShiftX, 
+            y: startZoom.y - mapShiftY 
+        });
+
+        return;
+    }
+
+    // 1-finger Drag (Piece)
+    if (e.touches.length === 1 && activePiece) {
+        const touch = e.touches[0];
+        processMouseInteraction(touch.clientX, touch.clientY);
+    }
+  };
+
+  const handleTouchEnd = () => {
+      // If we were pinching, clear the ref
+      pinchRef.current = null;
+  };
+
+  // --- Standard Mouse Handlers ---
+  const handleGlobalDragOver = (e: React.DragEvent) => {
+    e.preventDefault();
+    processMouseInteraction(e.clientX, e.clientY);
   };
 
   const handleMouseMove = (e: React.MouseEvent) => {
       if (activePiece) {
-          processInteraction(e.clientX, e.clientY);
+          processMouseInteraction(e.clientX, e.clientY);
       }
   };
 
-  // Global drop handler attached to SVG to ensure reliable hit testing even during animation
+  // Global drop handler
   const handleGlobalDrop = (e: React.DragEvent) => {
     e.preventDefault();
     e.stopPropagation();
     
-    // Cleanup zoom/drag state immediately
-    setHoveredRegionCode(null);
     if (zoomIntervalRef.current) clearInterval(zoomIntervalRef.current);
-    setZoom({ scale: 1, x: 500, y: 500 });
-    zoomTriggerPosRef.current = null;
-    lastMousePosRef.current = { x: 0, y: 0 };
-
-    // Determine target using visual hit testing
+    // Don't reset zoom here abruptly
+    
     const el = document.elementFromPoint(e.clientX, e.clientY);
     let targetCode: number | null = null;
-
     if (el && (el.tagName === 'path' || el.tagName === 'rect') && el.id.startsWith('pref-')) {
         targetCode = parseInt(el.id.replace('pref-', ''), 10);
     }
-
     if (targetCode !== null && !isNaN(targetCode)) {
         onPieceDrop(targetCode);
     }
+    setHoveredRegionCode(null);
   };
 
   const handleContainerDragLeave = (e: React.DragEvent) => {
      if (containerRef.current && !containerRef.current.contains(e.relatedTarget as Node)) {
          setHoveredRegionCode(null);
-         // Note: We do NOT clear the zoom here, relying on distance logic instead
      }
   };
 
@@ -295,12 +357,17 @@ const JapanMap: React.FC<JapanMapProps> = ({
     }
   };
 
+  const handleResetZoom = () => {
+      setZoom({ scale: 1, x: 500, y: 500 });
+      if (zoomIntervalRef.current) clearInterval(zoomIntervalRef.current);
+  };
+
   const hasPaths = prefectures.some(p => !!p.path);
 
   return (
     <div 
         ref={containerRef}
-        className="w-full h-full flex items-center justify-center p-2 md:p-6 relative animate-in fade-in duration-700"
+        className="w-full h-full flex items-center justify-center p-2 md:p-6 relative animate-in fade-in duration-700 touch-none"
         onDragLeave={handleContainerDragLeave}
     >
       
@@ -318,6 +385,17 @@ const JapanMap: React.FC<JapanMapProps> = ({
           )}
         </div>
       )}
+      
+      {/* Manual Zoom Controls (Visible on touch devices mainly, but useful for all) */}
+      <div className="absolute bottom-4 right-4 flex flex-col gap-2 z-20">
+          <button 
+            onClick={handleResetZoom}
+            className="bg-white/90 text-slate-600 p-3 rounded-full shadow-lg border border-slate-200 hover:bg-slate-100"
+            title="全体に戻す"
+          >
+              <Maximize size={20} />
+          </button>
+      </div>
 
       <svg
         viewBox="0 0 1000 1000"
@@ -327,14 +405,14 @@ const JapanMap: React.FC<JapanMapProps> = ({
         onDrop={handleGlobalDrop}
         onTouchStart={handleTouchStart}
         onTouchMove={handleTouchMove}
+        onTouchEnd={handleTouchEnd}
         onMouseMove={handleMouseMove}
       >
-        {/* Transparent background to catch drag events over ocean */}
+        {/* Transparent background to catch events */}
         <rect x="0" y="0" width="1000" height="1000" fill="transparent" />
 
-        {/* Zoom Wrapper Group */}
         <g
-            className="transition-transform duration-300 ease-out will-change-transform"
+            className="transition-transform duration-100 ease-out will-change-transform"
             style={{
                 transform: `translate(500px, 500px) scale(${zoom.scale}) translate(-${zoom.x}px, -${zoom.y}px)`,
                 transformOrigin: '0 0'
@@ -342,13 +420,11 @@ const JapanMap: React.FC<JapanMapProps> = ({
         >
             {hasPaths && (
                 <>
-                    {/* Okinawa Inset Border */}
                     <rect 
                         x="110" y="110" width="140" height="100" 
-                        fill="none" stroke="#cbd5e1" strokeWidth="2" rx="4" 
+                        fill="none" stroke="#cbd5e1" strokeWidth={2 / zoom.scale} rx="4" 
                         vectorEffect="non-scaling-stroke"
                     />
-                    {/* Okinawa Hitbox (Transparent Rect for easier dropping) */}
                     <rect 
                         id="pref-47-hitbox" 
                         x="110" y="110" width="140" height="100" 
@@ -357,7 +433,7 @@ const JapanMap: React.FC<JapanMapProps> = ({
                         style={{ pointerEvents: 'all' }}
                         onClick={() => handleClick(47)}
                     />
-                    <text x="180" y="100" textAnchor="middle" fill="#94a3b8" fontSize="14" fontWeight="bold" style={{fontFamily: 'Zen Maru Gothic'}}>沖縄</text>
+                    <text x="180" y="100" textAnchor="middle" fill="#94a3b8" fontSize={14} fontWeight="bold" style={{fontFamily: 'Zen Maru Gothic'}}>沖縄</text>
                 </>
             )}
             
@@ -371,21 +447,23 @@ const JapanMap: React.FC<JapanMapProps> = ({
             let strokeColor = '#64748b'; 
             let strokeWidth = 1.5;
             let zIndex = 0;
-            let className = "transition-all duration-300 ease-out outline-none pointer-events-auto";
+            let className = "transition-colors duration-300 ease-out outline-none pointer-events-auto";
 
             if (isPlaced) {
                 fillColor = '#86efac'; 
                 strokeColor = '#166534'; 
                 strokeWidth = 2;
                 zIndex = 5;
-                className += " animate-in zoom-in-50 duration-500"; 
             } else if (isHovered) {
                 fillColor = '#bae6fd'; 
                 strokeColor = '#0284c7'; 
                 strokeWidth = 3; 
                 zIndex = 10;
-                className += " filter drop-shadow-lg scale-[1.01]"; 
+                className += " filter drop-shadow-lg"; 
             }
+
+            // Scale stroke width inversely with zoom to keep lines sharp but not too thick
+            const adjustedStrokeWidth = strokeWidth / Math.sqrt(zoom.scale);
 
             return (
                 <g 
@@ -399,7 +477,7 @@ const JapanMap: React.FC<JapanMapProps> = ({
                     d={pref.path}
                     fill={fillColor}
                     stroke={strokeColor}
-                    strokeWidth={strokeWidth}
+                    strokeWidth={adjustedStrokeWidth}
                     strokeLinecap="round"
                     strokeLinejoin="round"
                     className={className}
@@ -412,11 +490,11 @@ const JapanMap: React.FC<JapanMapProps> = ({
                     y={pref.centerY}
                     textAnchor="middle"
                     alignmentBaseline="middle"
-                    fontSize="24" 
+                    fontSize={24 / Math.pow(zoom.scale, 0.3)} 
                     fontWeight="900"
                     fill="#064e3b"
                     stroke="white"
-                    strokeWidth="6"
+                    strokeWidth={6 / zoom.scale}
                     paintOrder="stroke"
                     className="pointer-events-none select-none font-sans animate-in fade-in zoom-in duration-500 delay-100"
                     style={{ 
