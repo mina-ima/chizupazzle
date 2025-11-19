@@ -3,7 +3,7 @@ import React, { useState, useMemo, useCallback, useEffect } from 'react';
 import confetti from 'canvas-confetti';
 import { Brain, Map as MapIcon, Sparkles, RefreshCw, Info, Home, Trophy, ArrowDown, Key, AlertCircle } from 'lucide-react';
 import { GameMode, GameState, PuzzlePiece, Prefecture } from './types';
-import { PREFECTURES, CAPITALS, GOURMET_DATA, LANDMARK_DATA, MASCOT_DATA, RANKING_DATA, CRAFT_DATA, POPULATION_DATA, AREA_DATA } from './constants';
+import { PREFECTURES, CAPITALS, GOURMET_DATA, LANDMARK_DATA, MASCOT_DATA, RANKING_DATA, CRAFT_DATA, POPULATION_DATA, AREA_DATA, MASCOT_IMAGES } from './constants';
 import { generateGameContent, getHint } from './services/geminiService';
 import { fetchImageForKeyword } from './services/imageService';
 import { fetchAndProcessMapData } from './utils/geoUtils';
@@ -206,6 +206,11 @@ const App: React.FC = () => {
                     // Don't fetch for 'Shape' or empty
                     if (!piece.content || piece.content === 'SHAPE') return null;
                     
+                    // 1. Check for Manual Override First
+                    if (mode === GameMode.MASCOT && MASCOT_IMAGES[piece.prefectureCode]) {
+                        return { id: piece.id, url: MASCOT_IMAGES[piece.prefectureCode] };
+                    }
+
                     // Get prefecture name for context
                     const pref = prefecturesData.find(p => p.code === piece.prefectureCode);
                     const context = pref ? pref.name : '';

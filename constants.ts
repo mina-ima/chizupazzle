@@ -93,6 +93,58 @@ export const MASCOT_DATA: Record<number, string> = {
   43: "くまモン", 44: "めじろん", 45: "みやざき犬", 46: "ぐりぶー", 47: "花笠マハエ"
 };
 
+// Manual Image Override for Mascots (Fill in URLs here to skip auto-fetch)
+export const MASCOT_IMAGES: Record<number, string> = {
+  1: "https://gotouchi-chara.jp/org/wp-content/uploads/2020/03/kyunchan.png", // 北海道: キュンちゃん
+  2: "https://www.yurugp.jp/rails/active_storage/blobs/proxy/eyJfcmFpbHMiOnsiZGF0YSI6Mzg1MywicHVyIjoiYmxvYl9pZCJ9fQ==--2db0346eefa223d7424d21a1ee8bf7f24f030c1a/00000439.jpg", // 青森: いくべぇ
+  3: "https://www.yurugp.jp/rails/active_storage/blobs/proxy/eyJfcmFpbHMiOnsiZGF0YSI6MzU4NjYsInB1ciI6ImJsb2JfaWQifX0=--8403e5fe97e1d8b832e0e00f3300ffafd8efc824/00004176.jpg", // 岩手: そばっち
+  4: "https://gotouchi-chara.jp/org/wp-content/uploads/2020/03/musubimaru.png", // 宮城: むすび丸
+  5: "https://www.pref.akita.lg.jp/uploads/public/archive_0000033524_00/imagetools0_0.png", // 秋田: んだッチ
+  6: "https://www.yurugp.jp/rails/active_storage/blobs/proxy/eyJfcmFpbHMiOnsiZGF0YSI6MTE1ODQsInB1ciI6ImJsb2JfaWQifX0=--637effeaaa5ba1e3f20c49e74677e7114dd70bdf/00001344.jpg", // 山形: きてけろくん
+  7: "https://www.yurugp.jp/rails/active_storage/blobs/proxy/eyJfcmFpbHMiOnsiZGF0YSI6OTgyLCJwdXIiOiJibG9iX2lkIn19--bea7434b9d810a638bb04d3c83fc0b6f95630a38/00000111.jpg", // 福島: キビタン
+  8: "https://gotouchi-chara.jp/org/wp-content/uploads/2020/03/hassurukoumon.png", // 茨城: ハッスル黄門
+  9: "https://www.pref.tochigi.lg.jp/c05/intro/tochigiken/hakken/images/45_tochimaru_l.jpg", // 栃木: とちまるくん
+  10: "https://gunmachan-official.jp/animation/wp/wp-content/uploads/2021/06/gunmachan.png", // 群馬: ぐんまちゃん
+  11: "https://www.pref.saitama.lg.jp/images/147721/5-1-01.png", // 埼玉: コバトン
+  12: "https://www.pref.chiba.lg.jp/kouhou/miryoku/chi-ba-kun/images/chi-ba_big.gif", // 千葉: チーバくん
+  13: "https://www.lip-luck.co.jp/lip-luck_new/wp-content/uploads/2020/01/%E6%9D%B1%E4%BA%AC%E5%9B%BD%E4%BD%932013-%E3%82%86%E3%82%8A%E3%83%BC%E3%81%A81.jpg", // 東京: ゆりーと
+  14: "https://yurugp.jp/rails/active_storage/blobs/proxy/eyJfcmFpbHMiOnsiZGF0YSI6MTIyMTQsInB1ciI6ImJsb2JfaWQifX0=--52bf81ada73e956b8717e34a001fab52832cf04d/00001414.jpg", // 神奈川: かながわキンタロウ
+  15: "https://www.pref.niigata.lg.jp/uploaded/image/27514.gif", // 新潟: トッキッキ
+  16: "https://www.pref.toyama.jp/images/45537/kigurumi.jpg", // 富山: きときと君
+  17: "https://pbs.twimg.com/profile_images/1809057371328761859/hKWQn3Oy_400x400.jpg", // 石川: ひゃくまんさん
+  18: "https://happy-ryu-fukui.com/wordpress/wp-content/uploads/2019/09/design.png", // 福井: はぴりゅう
+  19: "https://www.yamanashi-kankou.jp/kankou/event/images/hishimaru.png", // 山梨: 武田菱丸
+  20: "https://arukuma.jp/wp/wp-content/themes/world/images/common/arukuma_about.png", // 長野: アルクマ
+  21: "https://www.pref.gifu.lg.jp/uploaded/image/12676.jpg", // 岐阜: ミナモ
+  22: "https://prcdn.freetls.fastly.net/release_image/79445/96/79445-96-a20f39be753c535adadcc6d44af2be0a-1187x1339.png?format=jpeg&auto=webp&quality=85%2C65&width=1950&height=1350&fit=bounds", // 静岡: ふじっぴー
+  23: "https://www.city.nagoya.jp/_res/projects/default_project/_page_/001/014/025/hachimaru.jpg", // 愛知: はち丸
+  24: "https://www.yurugp.jp/rails/active_storage/blobs/proxy/eyJfcmFpbHMiOnsiZGF0YSI6NDQwOTYsInB1ciI6ImJsb2JfaWQifX0=--a523e327ca65dd01711b562c9437b32d52325588/00000087.jpg", // 三重: シロモチくん
+  25: "https://www.city.hikone.lg.jp/material/images/group/4/shoukai.png", // 滋賀: ひこにゃん
+  26: "https://mayumaro.jp/assets/img/prof_mayumaro.png", // 京都: まゆまろ
+  27: "https://www.pref.osaka.lg.jp/images/27681/01_1.jpg", // 大阪: もずやん
+  28: "https://web.pref.hyogo.lg.jp/kk03/images/habatan5.jpg", // 兵庫: はばタン
+  29: "https://www.pref.nara.jp/secure/125341/piisu_thumb.png", // 奈良: せんとくん
+  30: "https://www.pref.wakayama.lg.jp/prefg/000200/wakayamaprcharacter/kiichan_profile_d/img/001.jpg", // 和歌山: きいちゃん
+  31: "https://gotouchi-chara.jp/org/wp-content/uploads/2020/03/toripii.png", // 鳥取: トリピー
+  32: "https://www.kankou-shimane.com/shimanekko/images/design/dl01/char07.png", // 島根: しまねっこ
+  33: "https://miryoku-harenokuni-okayama.jp/momo-ura/images/profile-momo.gif", // 岡山: ももっち
+  34: "https://pbs.twimg.com/media/Ggkg3ztbUAA8yra.png", // 広島: ブンカッキー
+  35: "https://choruru.jp/wordperss/wp-content/themes/choruru-tmp/images/top/img_slider_1@2x.png", // 山口: ちょるる
+  36: "https://sudachikun.jp/images/introduction/full01.png", // 徳島: すだちくん
+  37: "https://prtimes.jp/i/23616/126/resize/d23616-126-202672-0.png", // 香川: うどん脳
+  38: "https://www.pref.ehime.jp/img/site/mican/img_mican01_sp.png", // 愛媛: みきゃん
+  39: "https://mangaoukoku-tosa.jp/old/data/504/L152.jpg", // 高知: くろしおくん
+  40: "https://www.smappon.jp/cc101914/file/96740.jpg", // 福岡: エコトン
+  41: "https://prtimes.jp/i/27600/144/resize/d27600-144-195376-3.jpg", // 佐賀: 壺侍
+  42: "https://www.pref.nagasaki.jp/shared/uploads/2023/01/1674873875-252x300.jpg", // 長崎: がんばくん
+  43: "https://kumamon-land.jp/profile/img/ph_profile.png", // 熊本: くまモン
+  44: "https://www.pref.oita.jp/img/ogp-oita-pref.png", // 大分: めじろん
+  45: "https://ouendan.kanko-miyazaki.jp/wp-content/themes/hinata-oendan/img/img-muchan.png", // 宮崎: みやざき犬
+  46: "https://greboo.com/system/wp-content/themes/greboo2015/function/img/page/profile/greboo_img.png", // 鹿児島: ぐりぶー
+  47: "https://www.ocvb.or.jp/res/img/activities/mahae/profile_mahae.jpg", // 沖縄: 花笠マハエ
+};
+
+
 // 日本一・産業 (Production/Industry No.1 or Famous)
 export const RANKING_DATA: Record<number, string> = {
   1: "じゃがいも日本一", 2: "にんにく日本一", 3: "ホップ日本一", 4: "サメの水揚げ", 5: "じゅんさい", 6: "西洋ナシ", 7: "桃の消費量",
