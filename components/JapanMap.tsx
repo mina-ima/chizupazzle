@@ -1,3 +1,4 @@
+
 import React, { useState, useRef, useEffect, useMemo, useCallback } from 'react';
 import { Prefecture, PuzzlePiece, GameMode } from '../types';
 import { RefreshCw, ZoomIn, ZoomOut, Maximize } from 'lucide-react';

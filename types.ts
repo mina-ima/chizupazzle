@@ -43,6 +43,7 @@ export interface PuzzlePiece {
     width: number;
     height: number;
   };
+  imageUrl?: string; // URL for background image (Mascot, Landmark, etc.)
 }
 
 export interface GameState {

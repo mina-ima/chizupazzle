@@ -1,3 +1,4 @@
+
 import React, { useRef } from 'react';
 import { PuzzlePiece, GameMode } from '../types';
 
@@ -40,7 +41,7 @@ const Piece: React.FC<PieceProps> = ({ piece, onDragStart, onDragEnd, selected, 
   const baseClasses = `
     relative w-full h-full p-2 rounded-2xl border-2 md:border-4 cursor-grab active:cursor-grabbing 
     transition-all duration-200 flex flex-col items-center justify-center text-center
-    hover:-translate-y-1 select-none touch-manipulation
+    hover:-translate-y-1 select-none touch-manipulation overflow-hidden
   `;
 
   const colorClasses = selected 
@@ -98,6 +99,44 @@ const Piece: React.FC<PieceProps> = ({ piece, onDragStart, onDragEnd, selected, 
     );
   }
 
+  // Render with Image if available
+  if (piece.imageUrl) {
+      return (
+        <div
+            draggable={!piece.isPlaced}
+            onDragStart={handleDragStart}
+            onDragEnd={handleDragEnd}
+            onClick={() => onSelect(piece)}
+            onTouchEnd={handleTouchEnd}
+            className={`${baseClasses} ${colorClasses}`}
+            style={{
+                backgroundImage: `url(${piece.imageUrl})`,
+                backgroundSize: 'cover',
+                backgroundPosition: 'center',
+            }}
+        >
+            {/* Overlay for readability */}
+            <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-black/20 to-transparent" />
+            
+            <div className="relative z-10 flex flex-col items-center justify-end w-full h-full pb-1">
+                <span className="font-black text-white text-sm md:text-base leading-tight break-words w-full line-clamp-2 drop-shadow-md">
+                    {piece.content}
+                </span>
+                <span className="mt-0.5 text-[9px] text-white/80 font-bold">
+                    No.{piece.prefectureCode}
+                </span>
+            </div>
+
+            {selected && (
+                <div className="absolute -top-2 -right-2 bg-indigo-500 text-white text-[10px] font-bold px-2 py-1 rounded-full animate-bounce shadow-md z-10">
+                    選択中
+                </div>
+            )}
+        </div>
+      );
+  }
+
+  // Standard Text Rendering
   return (
     <div
       draggable={!piece.isPlaced}

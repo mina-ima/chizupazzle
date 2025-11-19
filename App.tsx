@@ -1,9 +1,11 @@
+
 import React, { useState, useMemo, useCallback, useEffect } from 'react';
 import confetti from 'canvas-confetti';
 import { Brain, Map as MapIcon, Sparkles, RefreshCw, Info, Home, Trophy, ArrowDown, Key, AlertCircle } from 'lucide-react';
 import { GameMode, GameState, PuzzlePiece, Prefecture } from './types';
 import { PREFECTURES, CAPITALS, GOURMET_DATA, LANDMARK_DATA, MASCOT_DATA, RANKING_DATA, CRAFT_DATA, POPULATION_DATA, AREA_DATA } from './constants';
 import { generateGameContent, getHint } from './services/geminiService';
+import { fetchImageForKeyword } from './services/imageService';
 import { fetchAndProcessMapData } from './utils/geoUtils';
 import JapanMap from './components/JapanMap';
 import Piece from './components/Piece';
@@ -185,6 +187,58 @@ const App: React.FC = () => {
         pieces: newPieces,
         isLoading: false
       }));
+
+      // --- Start background image fetching for visual modes ---
+      const visualModes = [GameMode.MASCOT, GameMode.LANDMARK, GameMode.GOURMET, GameMode.CRAFT, GameMode.SOUVENIR, GameMode.CUSTOM];
+      
+      if (visualModes.includes(mode)) {
+        const fetchImages = async () => {
+            // Create a copy to update
+            const piecesToUpdate = [...newPieces];
+            
+            // Batch requests to avoid overwhelming the browser/API
+            const BATCH_SIZE = 5;
+            for (let i = 0; i < piecesToUpdate.length; i += BATCH_SIZE) {
+                const batch = piecesToUpdate.slice(i, i + BATCH_SIZE);
+                
+                const updates = await Promise.all(batch.map(async (piece) => {
+                    // Don't fetch for 'Shape' or empty
+                    if (!piece.content || piece.content === 'SHAPE') return null;
+                    
+                    // Get prefecture name for context
+                    const pref = prefecturesData.find(p => p.code === piece.prefectureCode);
+                    const context = pref ? pref.name : '';
+                    
+                    // Fetch
+                    const url = await fetchImageForKeyword(piece.content, context);
+                    if (url) {
+                        return { id: piece.id, url };
+                    }
+                    return null;
+                }));
+
+                // Update state progressively
+                setGameState(currentState => {
+                    // Only update if we are still in the same game session
+                    if (currentState.startTime !== currentState.startTime) return currentState;
+
+                    const updatedPieces = currentState.pieces.map(p => {
+                        const update = updates.find(u => u && u.id === p.id);
+                        if (update) {
+                            return { ...p, imageUrl: update.url };
+                        }
+                        return p;
+                    });
+                    return { ...currentState, pieces: updatedPieces };
+                });
+                
+                // Small delay between batches
+                await new Promise(r => setTimeout(r, 200));
+            }
+        };
+        fetchImages();
+      }
+
     } catch (error: any) {
       console.error("Init error", error);
       setGameState(prev => ({ ...prev, isLoading: false }));
@@ -453,7 +507,7 @@ const App: React.FC = () => {
         </div>
       </header>
 
-      {/* Main Map Area - Takes remaining height minus inventory */}
+      {/* Main Map Area */}
       <main className="flex-1 relative w-full overflow-hidden bg-sky-50/30 flex items-center justify-center p-2">
             
             {/* Correct Answer Overlay */}
@@ -469,14 +523,19 @@ const App: React.FC = () => {
                 </div>
             )}
 
-            {/* Desktop/Mobile Hint/Status overlay (Floating) */}
-            <div className="absolute top-4 left-4 z-20 flex flex-col gap-2 pointer-events-none max-w-[60%] md:max-w-xs">
+            {/* Current Piece Status Window (Right Side to avoid Okinawa overlap) */}
+            <div className="absolute top-4 right-4 z-20 flex flex-col gap-2 pointer-events-none max-w-[60%] md:max-w-xs">
                  {activePiece && (
-                    <div className="pointer-events-auto bg-white/90 backdrop-blur p-3 rounded-2xl shadow-lg border-2 border-white animate-in slide-in-from-left-2">
+                    <div className="pointer-events-auto bg-white/90 backdrop-blur p-3 rounded-2xl shadow-lg border-2 border-white animate-in slide-in-from-right-2">
                         <div className="text-xs font-bold text-slate-400 mb-1">いまもってるピース</div>
                         <div className="font-bold text-lg text-slate-800 text-center whitespace-pre-line leading-tight">
                             {gameState.mode === GameMode.SHAPE ? "このかたち" : activePiece.content}
                         </div>
+                        {activePiece.imageUrl && (
+                           <div className="mt-2 w-full h-24 rounded-lg bg-slate-100 overflow-hidden flex items-center justify-center">
+                               <img src={activePiece.imageUrl} alt={activePiece.content} className="w-full h-full object-cover" />
+                           </div>
+                        )}
                         
                         <div className="mt-2 mb-2 text-xs font-bold text-center text-indigo-500 bg-indigo-50 py-1 rounded border border-indigo-100 animate-pulse">
                             地図をタップして配置！
@@ -494,9 +553,9 @@ const App: React.FC = () => {
                  )}
             </div>
 
-             {/* Hint Bubble */}
+             {/* Hint Bubble (Bottom Left to avoid overlap) */}
              {hint && (
-                 <div className="absolute top-1/2 right-4 transform -translate-y-1/2 z-40 max-w-[200px] md:max-w-xs bg-white border-4 border-amber-300 text-slate-700 p-4 rounded-2xl shadow-xl text-sm animate-in zoom-in duration-300">
+                 <div className="absolute bottom-4 left-4 z-40 max-w-[200px] md:max-w-xs bg-white border-4 border-amber-300 text-slate-700 p-4 rounded-2xl shadow-xl text-sm animate-in zoom-in slide-in-from-bottom-4 duration-300">
                     <p className="font-black mb-1 flex items-center gap-1 text-amber-500"><Info size={16}/> ヒント</p>
                     {hint}
                     <button onClick={() => setHint(null)} className="absolute -top-3 -right-3 bg-slate-100 hover:bg-slate-200 rounded-full p-1.5 shadow-sm text-slate-400 border-2 border-white">✕</button>
