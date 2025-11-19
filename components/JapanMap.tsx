@@ -23,6 +23,70 @@ interface ZoomState {
 // 1倍(全体) -> 3倍(地方) -> 6倍(県周辺) -> 12倍(詳細)
 const ZOOM_LEVELS = [1, 3, 6, 12];
 
+// Helper: Calculate local SVG map coordinates from screen coordinates
+// Handles "preserveAspectRatio=xMidYMid meet" logic
+const getMapPointFromScreen = (screenX: number, screenY: number, rect: DOMRect, zoom: ZoomState) => {
+  const viewRatio = rect.width / rect.height;
+  const svgRatio = 1; // 1000x1000
+  
+  let scaleFactor = 1;
+  let offsetX = 0;
+  let offsetY = 0;
+  
+  if (viewRatio > svgRatio) {
+    // Screen is wider than map (height constrained) -> horizontal letterboxing
+    scaleFactor = rect.height / 1000;
+    offsetX = (rect.width - 1000 * scaleFactor) / 2;
+  } else {
+    // Screen is taller than map (width constrained) -> vertical letterboxing
+    scaleFactor = rect.width / 1000;
+    offsetY = (rect.height - 1000 * scaleFactor) / 2;
+  }
+
+  // Convert Screen px -> SVG internal px (0-1000)
+  const svgX = (screenX - rect.left - offsetX) / scaleFactor;
+  const svgY = (screenY - rect.top - offsetY) / scaleFactor;
+
+  // Convert SVG internal px -> Map Logical Coordinates (considering current zoom/pan)
+  // Transformation logic: svgX = (mapX - zoom.x) * zoom.scale + 500
+  // Solve for mapX:
+  const mapX = (svgX - 500) / zoom.scale + zoom.x;
+  const mapY = (svgY - 500) / zoom.scale + zoom.y;
+
+  return { x: mapX, y: mapY };
+};
+
+// Helper: Calculate required Zoom Center (zoom.x/y) to place a specific map point at a specific screen point
+const getZoomCenterForTarget = (targetMapPoint: {x: number, y: number}, screenX: number, screenY: number, rect: DOMRect, nextScale: number) => {
+  const viewRatio = rect.width / rect.height;
+  const svgRatio = 1;
+  
+  let scaleFactor = 1;
+  let offsetX = 0;
+  let offsetY = 0;
+  
+  if (viewRatio > svgRatio) {
+    scaleFactor = rect.height / 1000;
+    offsetX = (rect.width - 1000 * scaleFactor) / 2;
+  } else {
+    scaleFactor = rect.width / 1000;
+    offsetY = (rect.height - 1000 * scaleFactor) / 2;
+  }
+
+  const svgX = (screenX - rect.left - offsetX) / scaleFactor;
+  const svgY = (screenY - rect.top - offsetY) / scaleFactor;
+  
+  // We want: svgX = (targetMapPoint.x - newZoomX) * nextScale + 500
+  // Solve for newZoomX:
+  // (targetMapPoint.x - newZoomX) = (svgX - 500) / nextScale
+  // newZoomX = targetMapPoint.x - (svgX - 500) / nextScale
+  
+  const newZoomX = targetMapPoint.x - (svgX - 500) / nextScale;
+  const newZoomY = targetMapPoint.y - (svgY - 500) / nextScale;
+  
+  return { x: newZoomX, y: newZoomY };
+};
+
 const JapanMap: React.FC<JapanMapProps> = ({ 
   prefectures,
   activePiece, 
@@ -43,29 +107,22 @@ const JapanMap: React.FC<JapanMapProps> = ({
   const pinchRef = useRef<{
     startDist: number;
     startScale: number;
-    startCenter: { x: number, y: number }; // Screen coordinates
-    startZoom: ZoomState;
+    startMapPoint: { x: number, y: number }; // The map coordinate under the pinch center
   } | null>(null);
 
-  // Reset zoom when piece is dropped or cancelled (only if not manually zoomed via pinch)
-  // We want to keep the zoom level if the user manually adjusted it to find a spot.
-  // But if the activePiece becomes null (drop finished), we might want to reset IF we were in auto-zoom mode.
-  // For simplicity in this hybrid mode, we reset on piece change ONLY if scale is 1 (fresh start) or if needed.
-  // Actually, keeping zoom context is better for gameplay. Let's NOT auto-reset zoom on activePiece change if touched.
+  // Reset zoom triggers when piece changes
   useEffect(() => {
     if (!activePiece) {
       if (zoomIntervalRef.current) clearInterval(zoomIntervalRef.current);
       zoomTriggerPosRef.current = null;
       lastMousePosRef.current = { x: 0, y: 0 };
-      // Note: We do NOT reset zoom here to allow users to admire their work or stay zoomed in
     } else {
-        // Reset internal trackers for new piece
         lastMousePosRef.current = { x: 0, y: 0 };
         zoomTriggerPosRef.current = null;
     }
   }, [activePiece]); 
 
-  // Sort prefectures to ensure placed/hovered items are rendered on top (DOM order = z-index in SVG)
+  // Sort prefectures to ensure placed/hovered items are rendered on top
   const sortedPrefectures = useMemo(() => {
     return [...prefectures].sort((a, b) => {
       const aPlaced = placedPieces.some(p => p.prefectureCode === a.code);
@@ -73,24 +130,18 @@ const JapanMap: React.FC<JapanMapProps> = ({
       const aHover = hoveredRegionCode === a.code;
       const bHover = hoveredRegionCode === b.code;
 
-      // Hovered is highest priority (render last)
       if (aHover && !bHover) return 1;
       if (!aHover && bHover) return -1;
-
-      // Placed is next priority
       if (aPlaced && !bPlaced) return 1;
       if (!aPlaced && bPlaced) return -1;
-
       return 0;
     });
   }, [prefectures, placedPieces, hoveredRegionCode]);
 
   // --- Mouse Interaction Logic (Desktop Auto-Zoom) ---
   const processMouseInteraction = useCallback((currentX: number, currentY: number) => {
-    // Skip auto-zoom logic if user is pinching
     if (pinchRef.current) return;
 
-    // Initialize lastMousePos if it's the first event
     if (lastMousePosRef.current.x === 0 && lastMousePosRef.current.y === 0) {
         lastMousePosRef.current = { x: currentX, y: currentY };
     }
@@ -107,26 +158,20 @@ const JapanMap: React.FC<JapanMapProps> = ({
         setHoveredRegionCode(foundCode);
     }
 
-    // Zoom Logic (Auto-zoom on hover for mouse)
-    // Only active if we haven't manually zoomed via pinch (heuristic: generic zoom levels)
-    // If the user is using touch, we generally want to disable this auto-zoom behavior 
-    // because it interferes with manual pinch/pan.
-    // We'll check event type in the calling handlers or rely on the fact that touch triggers handleTouchMove.
-    
+    // Mouse Auto-Zoom logic
     const dx = currentX - lastMousePosRef.current.x;
     const dy = currentY - lastMousePosRef.current.y;
     const dist = Math.hypot(dx, dy);
     lastMousePosRef.current = { x: currentX, y: currentY };
 
-    // Auto zoom-out logic
+    // Auto zoom-out
     if (zoom.scale > 1 && zoomTriggerPosRef.current) {
         const distFromAnchor = Math.hypot(
             currentX - zoomTriggerPosRef.current.x,
             currentY - zoomTriggerPosRef.current.y
         );
         if (distFromAnchor > 150) {
-            const currentIdx = ZOOM_LEVELS.indexOf(zoom.scale); // Might be -1 if custom zoomed
-            // If custom zoomed, just zoom out to nearest level
+            const currentIdx = ZOOM_LEVELS.indexOf(zoom.scale); 
             let newScale = 1;
             if (currentIdx > 0) newScale = ZOOM_LEVELS[currentIdx - 1];
             else if (currentIdx === -1 && zoom.scale > 1) newScale = 1;
@@ -145,7 +190,7 @@ const JapanMap: React.FC<JapanMapProps> = ({
         }
     }
 
-    // Auto zoom-in logic (Only if moving slowly and over a target)
+    // Auto zoom-in cancellation on movement
     if (dist > 20) { 
         if (zoomIntervalRef.current) {
           clearInterval(zoomIntervalRef.current);
@@ -154,12 +199,10 @@ const JapanMap: React.FC<JapanMapProps> = ({
         return; 
     }
 
-    // Trigger zoom interval
+    // Trigger auto-zoom interval
     if (!zoomIntervalRef.current && activePiece && foundCode && zoom.scale < 12) {
       zoomIntervalRef.current = setInterval(() => {
         const { x: lx, y: ly } = lastMousePosRef.current;
-        
-        // Only auto-zoom if NOT pinching
         if (pinchRef.current) return;
 
         const checkEl = document.elementFromPoint(lx, ly);
@@ -173,38 +216,23 @@ const JapanMap: React.FC<JapanMapProps> = ({
             return;
         }
 
-        const codeStr = checkEl.id.replace('pref-', '');
-        const targetCode = parseInt(codeStr, 10);
-        const targetPref = prefectures.find(p => p.code === targetCode);
-
         setZoom(prevZoom => {
-             // Find next logical zoom level
             let nextScale = ZOOM_LEVELS.find(z => z > prevZoom.scale);
             if (!nextScale) {
                  if (prevZoom.scale < 12) nextScale = 12;
                  else return prevZoom;
             }
 
-            let newCenterX = prevZoom.x;
-            let newCenterY = prevZoom.y;
-
-            if (targetPref && targetPref.centerX && targetPref.centerY) {
-                newCenterX = targetPref.centerX;
-                newCenterY = targetPref.centerY;
-            } else {
-                 // Fallback logic
-                const rect = containerRef.current?.getBoundingClientRect();
-                if (rect) {
-                    const mouseNormX = ((lx - rect.left) / rect.width) * 1000;
-                    const mouseNormY = ((ly - rect.top) / rect.height) * 1000;
-                    const currentMapX = prevZoom.x + (mouseNormX - 500) / prevZoom.scale;
-                    const currentMapY = prevZoom.y + (mouseNormY - 500) / prevZoom.scale;
-                    newCenterX = currentMapX - (mouseNormX - 500) / nextScale;
-                    newCenterY = currentMapY - (mouseNormY - 500) / nextScale;
-                }
-            }
+            // Smart zoom center logic for mouse
+            const rect = containerRef.current?.getBoundingClientRect();
+            if (!rect) return prevZoom;
+            
+            // Zoom towards mouse cursor
+            const currentMapPoint = getMapPointFromScreen(lx, ly, rect, prevZoom);
+            const newCenter = getZoomCenterForTarget(currentMapPoint, lx, ly, rect, nextScale);
+            
             zoomTriggerPosRef.current = { x: lx, y: ly };
-            return { scale: nextScale, x: newCenterX, y: newCenterY };
+            return { scale: nextScale, x: newCenter.x, y: newCenter.y };
         });
       }, 800); 
     }
@@ -229,24 +257,28 @@ const JapanMap: React.FC<JapanMapProps> = ({
   const handleTouchStart = (e: React.TouchEvent) => {
     if (e.touches.length === 2) {
         // Start Pinch/Pan
-        e.preventDefault(); // Prevent browser zoom
+        e.preventDefault(); 
+        
+        const rect = containerRef.current?.getBoundingClientRect();
+        if (!rect) return;
+
         const dist = getTouchDistance(e.touches);
         const center = getTouchCenter(e.touches);
         
-        // Stop any auto-zoom
         if (zoomIntervalRef.current) {
             clearInterval(zoomIntervalRef.current);
             zoomIntervalRef.current = null;
         }
 
+        // Calculate where on the map we are pinching
+        const startMapPoint = getMapPointFromScreen(center.x, center.y, rect, zoom);
+
         pinchRef.current = {
             startDist: dist,
             startScale: zoom.scale,
-            startCenter: center,
-            startZoom: { ...zoom }
+            startMapPoint
         };
     } else if (e.touches.length === 1 && activePiece) {
-        // Start dragging piece logic
         const touch = e.touches[0];
         lastMousePosRef.current = { x: touch.clientX, y: touch.clientY };
         processMouseInteraction(touch.clientX, touch.clientY);
@@ -254,56 +286,33 @@ const JapanMap: React.FC<JapanMapProps> = ({
   };
 
   const handleTouchMove = (e: React.TouchEvent) => {
-    // 2-finger Zoom/Pan
     if (e.touches.length === 2 && pinchRef.current) {
         e.preventDefault();
-        const { startDist, startScale, startCenter, startZoom } = pinchRef.current;
+        const rect = containerRef.current?.getBoundingClientRect();
+        if (!rect) return;
+
+        const { startDist, startScale, startMapPoint } = pinchRef.current;
         
         const currentDist = getTouchDistance(e.touches);
         const currentCenter = getTouchCenter(e.touches);
 
         // 1. Calculate New Scale
         let newScale = startScale * (currentDist / startDist);
-        // Clamp scale
         newScale = Math.max(1, Math.min(newScale, 15));
 
-        // 2. Calculate Pan (Translation)
-        // Movement of fingers on screen
-        const dx = currentCenter.x - startCenter.x;
-        const dy = currentCenter.y - startCenter.y;
+        // 2. Calculate New Zoom Center
+        // We want the startMapPoint to stay at currentCenter on screen
+        const newZoomCenter = getZoomCenterForTarget(startMapPoint, currentCenter.x, currentCenter.y, rect, newScale);
 
-        // Convert screen movement to map units
-        // The map is 1000x1000 logic. We need to know how many pixels is 1 map unit.
-        const rect = containerRef.current?.getBoundingClientRect();
-        if (!rect) return;
-        
-        const screenToMapRatio = 1000 / rect.width; // e.g., 2.5 map units per pixel
-        
-        // The shift in map center (zoom.x/y) needs to be opposite to finger movement
-        // AND adjusted for scale.
-        const mapShiftX = (dx * screenToMapRatio) / newScale;
-        const mapShiftY = (dy * screenToMapRatio) / newScale;
-
-        // 3. Zoom Focus Adjustment
-        // When zooming, we want to zoom "towards" the midpoint of fingers.
-        // Logic: The point under the fingers (StartCenter) should stay under the fingers.
-        // Current implementation centers on (zoom.x, zoom.y).
-        // Complex math simplified: We rely mainly on panning the center relative to the scale change.
-        // For true "zoom to point", we need to adjust center based on offset from center screen.
-        
-        // Basic Pan Implementation (Good enough combined with scale)
-        // Just update based on startZoom
-        
         setZoom({
             scale: newScale,
-            x: startZoom.x - mapShiftX, 
-            y: startZoom.y - mapShiftY 
+            x: newZoomCenter.x, 
+            y: newZoomCenter.y
         });
 
         return;
     }
 
-    // 1-finger Drag (Piece)
     if (e.touches.length === 1 && activePiece) {
         const touch = e.touches[0];
         processMouseInteraction(touch.clientX, touch.clientY);
@@ -311,7 +320,6 @@ const JapanMap: React.FC<JapanMapProps> = ({
   };
 
   const handleTouchEnd = () => {
-      // If we were pinching, clear the ref
       pinchRef.current = null;
   };
 
@@ -327,13 +335,11 @@ const JapanMap: React.FC<JapanMapProps> = ({
       }
   };
 
-  // Global drop handler
   const handleGlobalDrop = (e: React.DragEvent) => {
     e.preventDefault();
     e.stopPropagation();
     
     if (zoomIntervalRef.current) clearInterval(zoomIntervalRef.current);
-    // Don't reset zoom here abruptly
     
     const el = document.elementFromPoint(e.clientX, e.clientY);
     let targetCode: number | null = null;
@@ -387,7 +393,6 @@ const JapanMap: React.FC<JapanMapProps> = ({
         </div>
       )}
       
-      {/* Manual Zoom Controls (Visible on touch devices mainly, but useful for all) */}
       <div className="absolute bottom-4 right-4 flex flex-col gap-2 z-20">
           <button 
             onClick={handleResetZoom}
@@ -409,14 +414,15 @@ const JapanMap: React.FC<JapanMapProps> = ({
         onTouchEnd={handleTouchEnd}
         onMouseMove={handleMouseMove}
       >
-        {/* Transparent background to catch events */}
         <rect x="0" y="0" width="1000" height="1000" fill="transparent" />
 
         <g
-            className="transition-transform duration-100 ease-out will-change-transform"
+            className="will-change-transform"
             style={{
                 transform: `translate(500px, 500px) scale(${zoom.scale}) translate(-${zoom.x}px, -${zoom.y}px)`,
-                transformOrigin: '0 0'
+                transformOrigin: '0 0',
+                // Disable transition during pinch to keep it responsive
+                transition: pinchRef.current ? 'none' : 'transform 0.1s ease-out'
             }}
         >
             {hasPaths && (
@@ -463,7 +469,6 @@ const JapanMap: React.FC<JapanMapProps> = ({
                 className += " filter drop-shadow-lg"; 
             }
 
-            // Scale stroke width inversely with zoom to keep lines sharp but not too thick
             const adjustedStrokeWidth = strokeWidth / Math.sqrt(zoom.scale);
 
             return (
